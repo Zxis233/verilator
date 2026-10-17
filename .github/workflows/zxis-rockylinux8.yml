@@ -1,0 +1,117 @@
+---
+# SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
+name: Rocky Linux 8 prebuilt release
+
+on:
+  push:
+    branches: [stable]
+  workflow_dispatch:
+    inputs:
+      sync_upstream:
+        description: Merge upstream stable before building
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rockylinux8-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'Zxis233/verilator'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      RELEASE_TAG: rockylinux8-latest
+      ROCKY_IMAGE: rockylinux/rockylinux:8.10@sha256:e8a49c5403b687db05d4d67333fa45808fbe74f36e683cec7abb1f7d0f2338c6
+    steps:
+      - name: Check out the fork's stable branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: stable
+          fetch-depth: 0
+          token: ${{ secrets.WORKFLOW_TOKEN || github.token }}
+
+      - name: Merge upstream without discarding fork additions
+        if: github.event_name == 'workflow_dispatch' && inputs.sync_upstream
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch https://github.com/verilator/verilator.git stable
+          git merge --no-edit FETCH_HEAD
+          git push origin HEAD:stable
+
+      - name: Record the source revision
+        run: echo "SOURCE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Build the precompiled distribution in Rocky Linux 8.10
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" -w /work \
+            -e GITHUB_REPOSITORY -e GITHUB_RUN_ID -e GITHUB_RUN_ATTEMPT \
+            -e RELEASE_TAG -e ROCKY_IMAGE -e BUILD_JOBS=4 \
+            "$ROCKY_IMAGE" bash ci/rockylinux8/build.sh
+
+      - name: Test offline deployment in a clean Rocky Linux container
+        run: |
+          docker run --rm --network none \
+            -v "$GITHUB_WORKSPACE:/work:ro" -w /tmp \
+            "$ROCKY_IMAGE" bash /work/ci/rockylinux8/smoke-test.sh
+
+      - name: Publish the rolling prerelease
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN || github.token }}
+        run: |
+          # These filenames are unique per run. Upload the installer last so
+          # an already downloaded installer always refers to an existing asset.
+          archive=$(find dist -maxdepth 1 -name 'verilator-*.tar.gz' -printf '%f\n')
+          sources=$(find dist -maxdepth 1 -name 'sources-*.tar.gz' -printf '%f\n')
+          version=$(sed -n 's/^version=//p' dist/BUILD-INFO.txt)
+          cat > dist/release-notes.md <<EOF
+          Precompiled Verilator ${version} for Rocky Linux 8.10, x86_64.
+
+          Install or update (no source checkout, package installation, or local Verilator build):
+
+          \`\`\`bash
+          curl -fsSL https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/install.sh -o /tmp/install-verilator.sh
+          sudo bash /tmp/install-verilator.sh
+          \`\`\`
+
+          The main archive includes Verilator, its runtime headers, Perl, Python 3.9, Make,
+          GCC 13, binutils, a Rocky Linux sysroot, and required runtime libraries.
+          The default prefix is /opt/verilator-rockylinux8; public commands are
+          linked in /usr/local/bin. The installer verifies SHA-256 before deployment.
+
+          Source revision: ${SOURCE_SHA}
+          Build: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          Verified in a clean Rocky Linux 8.10 container with networking disabled:
+          offline installation, relocated installation, and compilation/execution
+          of a SystemVerilog timing model. This distribution is a prerelease;
+          rockylinux8-latest is a fixed download channel, not GitHub's Latest release.
+
+          Matching third-party source RPMs are in ${sources}.
+          Older versioned archives are retained so existing installers keep working.
+          EOF
+          git tag -f "$RELEASE_TAG" "$SOURCE_SHA"
+          git push origin "refs/tags/$RELEASE_TAG" --force
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "dist/$archive" "dist/$sources" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Verilator ${version} - Rocky Linux 8.10 (rolling prerelease)" \
+              --notes-file dist/release-notes.md --prerelease --latest=false
+          else
+            gh release create "$RELEASE_TAG" "dist/$archive" "dist/$sources" \
+              --repo "$GITHUB_REPOSITORY" --verify-tag --target master --draft --prerelease --latest=false \
+              --title "Verilator ${version} - Rocky Linux 8.10 (rolling prerelease)" \
+              --notes-file dist/release-notes.md
+          fi
+          gh release upload "$RELEASE_TAG" dist/BUILD-INFO.txt dist/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload "$RELEASE_TAG" dist/install.sh \
+            --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
