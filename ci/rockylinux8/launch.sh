@@ -8,7 +8,7 @@ command_name=${0##*/}
 export PATH="$prefix/bin:$prefix/toolchain/bin:$PATH"
 export LD_LIBRARY_PATH="$prefix/runtime/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export PERL5LIB="$prefix/runtime/lib64/perl5:$prefix/runtime/share/perl5:$prefix/runtime/lib64/perl5/vendor_perl:$prefix/runtime/share/perl5/vendor_perl"
-unset VERILATOR_ROOT
+export VERILATOR_ROOT="$prefix/share/verilator"
 
 case "$command_name" in
     gcc|cc)
@@ -17,7 +17,7 @@ case "$command_name" in
     g++|c++)
         exec "$prefix/toolchain/bin/g++" --sysroot="$prefix/sysroot" "$@"
         ;;
-    make|perl)
+    make|perl|xargs)
         exec "$prefix/runtime/bin/$command_name" "$@"
         ;;
     python3)

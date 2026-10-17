@@ -39,9 +39,14 @@ mkdir -p "$package_root/bin" "$package_root/runtime/bin" "$package_root/runtime/
 touch "$package_root/.verilator-rockylinux8"
 
 # Relocate the vendor compiler, and give it its own headers and linker sysroot.
-cp -aL /opt/rh/gcc-toolset-13/root/usr/. "$package_root/toolchain/"
+# This is a 64-bit distribution; vendor multilib symlinks may point to
+# uninstalled i686 packages and must not be dereferenced.
+tar -C /opt/rh/gcc-toolset-13/root/usr --exclude='*/32' --dereference -cf - . \
+    | tar -xf - -C "$package_root/toolchain"
 cp -a /usr/include "$package_root/sysroot/usr/"
 ln -s usr/lib64 "$package_root/sysroot/lib64"
+ln -s usr/lib64 "$package_root/sysroot/lib"
+ln -s lib64 "$package_root/sysroot/usr/lib"
 sysroot_packages=(glibc glibc-devel glibc-headers kernel-headers libgcc libstdc++ zlib zlib-devel)
 for rpm_package in "${sysroot_packages[@]}"; do
     while IFS= read -r path; do
@@ -61,7 +66,7 @@ while IFS= read -r -d '' path; do
     fi
 done < <(find "$package_root/toolchain" -type f -name '*.so' -print0)
 
-cp -aL /usr/bin/perl /usr/bin/make "$package_root/runtime/bin/"
+cp -aL /usr/bin/perl /usr/bin/make /usr/bin/xargs "$package_root/runtime/bin/"
 cp -aL /usr/bin/python3.9 "$package_root/runtime/bin/python3"
 cp -aL /usr/lib64/python3.9 "$package_root/runtime/lib64/"
 cp -aL /usr/lib64/perl5 "$package_root/runtime/lib64/"
@@ -85,7 +90,7 @@ done < <(find "$package_root/toolchain" "$package_root/runtime" "$package_root/l
 for path in "$package_root/libexec/"*; do
     install -m 755 ci/rockylinux8/launch.sh "$package_root/bin/${path##*/}"
 done
-for name in gcc g++ cc c++ make perl python3 verilator-toolchain; do
+for name in gcc g++ cc c++ make perl python3 xargs verilator-toolchain; do
     install -m 755 ci/rockylinux8/launch.sh "$package_root/bin/$name"
 done
 # pkg-config is the one installed metadata file that embeds its old prefix.
@@ -109,15 +114,15 @@ cp dist/BUILD-INFO.txt "$package_root/BUILD-INFO.txt"
 
 # Publish matching sources for the redistributed compiler/runtime packages.
 {
-    rpm -q --qf '%{SOURCERPM}\n' "${sysroot_packages[@]}" make perl-interpreter python39
+    rpm -q --qf '%{SOURCERPM}\n' "${sysroot_packages[@]}" findutils make perl-interpreter python39
     find /opt/rh/gcc-toolset-13/root/usr /usr/include /usr/lib64/perl5 /usr/share/perl5 /usr/lib64/python3.9 \
         -type f -print0 | xargs -0 rpm -qf --qf '%{SOURCERPM}\n'
     sort -u "$stage/runtime-files" | xargs rpm -qf --qf '%{SOURCERPM}\n'
 } | sort -u > "$package_root/SOURCE-RPMS.txt"
-mkdir -p "$stage/sources"
+mkdir -p dist/sources
 mapfile -t source_nvrs < <(sed 's/\.src\.rpm$//' "$package_root/SOURCE-RPMS.txt")
-dnf download --source --destdir "$stage/sources" "${source_nvrs[@]}"
-tar -czf "dist/$sources_name" -C "$stage" sources
+dnf download --source --destdir dist/sources "${source_nvrs[@]}"
+tar -czf "dist/$sources_name" -C dist sources
 tar -czf "dist/$archive_name" -C "$stage/opt" verilator-rockylinux8
 
 export repository release_tag archive_name

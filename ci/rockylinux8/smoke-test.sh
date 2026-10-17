@@ -9,11 +9,27 @@ for name in g++ make perl python3; do
         exit 1
     fi
 done
-archive=$(find /work/dist -maxdepth 1 -name 'verilator-*.tar.gz' -print)
+archives=(/work/dist/verilator-*.tar.gz)
+archive=${archives[0]}
+expect_failure() {
+    if "$@"; then
+        printf 'Command unexpectedly succeeded: %s\n' "$*" >&2
+        exit 1
+    fi
+}
+: > /tmp/bad-archive.tar.gz
+expect_failure bash /work/dist/install.sh --archive /tmp/bad-archive.tar.gz \
+    --prefix /tmp/invalid-install --no-symlinks
+test ! -e /tmp/invalid-install
+expect_failure bash /work/dist/install.sh --archive "$archive" \
+    --prefix /tmp/nested-install --bin-dir /tmp/nested-install/bin
 bash /work/dist/install.sh --archive "$archive"
 verilator --version
 verilator_coverage --version
 test "$(verilator --get-supported COROUTINES)" = 1
+ln -s /opt/verilator-rockylinux8 /tmp/prefix-alias
+expect_failure bash /work/dist/install.sh --archive "$archive" \
+    --prefix /tmp/prefix-alias --no-symlinks
 
 cat > /tmp/smoke.sv <<'EOF'
 module smoke;
@@ -40,4 +56,5 @@ bash /work/dist/install.sh --archive "$archive" --prefix /tmp/relocated --no-sym
 
 # Updating keeps the previous installation rather than deleting it.
 bash /work/dist/install.sh --archive "$archive"
-test -n "$(find /opt -maxdepth 1 -name 'verilator-rockylinux8.previous.*' -print)"
+backups=(/opt/verilator-rockylinux8.previous.*)
+test -d "${backups[0]}"

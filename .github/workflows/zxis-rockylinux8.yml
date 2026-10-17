@@ -70,7 +70,8 @@ jobs:
           archive=$(find dist -maxdepth 1 -name 'verilator-*.tar.gz' -printf '%f\n')
           sources=$(find dist -maxdepth 1 -name 'sources-*.tar.gz' -printf '%f\n')
           version=$(sed -n 's/^version=//p' dist/BUILD-INFO.txt)
-          cat > dist/release-notes.md <<EOF
+          notes_file="$RUNNER_TEMP/rockylinux8-release-notes.md"
+          cat > "$notes_file" <<EOF
           Precompiled Verilator ${version} for Rocky Linux 8.10, x86_64.
 
           Install or update (no source checkout, package installation, or local Verilator build):
@@ -103,15 +104,16 @@ jobs:
               --repo "$GITHUB_REPOSITORY" --clobber
             gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
               --title "Verilator ${version} - Rocky Linux 8.10 (rolling prerelease)" \
-              --notes-file dist/release-notes.md --prerelease --latest=false
+              --notes-file "$notes_file" --prerelease --latest=false
           else
             gh release create "$RELEASE_TAG" "dist/$archive" "dist/$sources" \
               --repo "$GITHUB_REPOSITORY" --verify-tag --target master --draft --prerelease --latest=false \
               --title "Verilator ${version} - Rocky Linux 8.10 (rolling prerelease)" \
-              --notes-file dist/release-notes.md
+              --notes-file "$notes_file"
           fi
           gh release upload "$RELEASE_TAG" dist/BUILD-INFO.txt dist/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" --clobber
           gh release upload "$RELEASE_TAG" dist/install.sh \
             --repo "$GITHUB_REPOSITORY" --clobber
-          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --draft=false --prerelease --latest=false
