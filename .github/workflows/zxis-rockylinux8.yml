@@ -55,11 +55,16 @@ jobs:
             -e RELEASE_TAG -e ROCKY_IMAGE -e BUILD_JOBS=4 \
             "$ROCKY_IMAGE" bash ci/rockylinux8/build.sh
 
-      - name: Test offline deployment in a clean Rocky Linux container
+      - name: Prepare Rocky Linux with system Python 3.12
+        run: |
+          docker build --build-arg ROCKY_IMAGE="$ROCKY_IMAGE" \
+            -f ci/rockylinux8/test.Dockerfile -t verilator-rockylinux8-test ci/rockylinux8
+
+      - name: Test offline deployment with system Python 3.12
         run: |
           docker run --rm --network none \
             -v "$GITHUB_WORKSPACE:/work:ro" -w /tmp \
-            "$ROCKY_IMAGE" bash /work/ci/rockylinux8/smoke-test.sh
+            verilator-rockylinux8-test bash /work/ci/rockylinux8/smoke-test.sh
 
       - name: Publish the rolling prerelease
         env:
@@ -81,15 +86,18 @@ jobs:
           sudo bash /tmp/install-verilator.sh
           \`\`\`
 
-          The main archive includes Verilator, its runtime headers, Perl, Python 3.9, Make,
+          The main archive includes Verilator, its runtime headers, Perl, Make,
           GCC 13, binutils, a Rocky Linux sysroot, and required runtime libraries.
+          Python is not bundled: an existing system python3 is required, tested
+          with Python 3.12 selected through alternatives. The installer and
+          Verilator do not change that system selection.
           The default prefix is /opt/verilator-rockylinux8; public commands are
           linked in /usr/local/bin. The installer verifies SHA-256 before deployment.
 
           Source revision: ${SOURCE_SHA}
           Build: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
 
-          Verified in a clean Rocky Linux 8.10 container with networking disabled:
+          Verified in Rocky Linux 8.10 with system Python 3.12 and networking disabled:
           offline installation, relocated installation, and compilation/execution
           of a SystemVerilog timing model. This distribution is a prerelease;
           rockylinux8-latest is a fixed download channel, not GitHub's Latest release.

@@ -13,10 +13,15 @@ Install or update::
 
 The installer downloads and verifies a precompiled archive. It does not clone
 sources, invoke a package manager, or compile Verilator. The archive contains
-the installed Verilator tree, Perl, Python 3.9, Make, GCC 13, binutils, development headers,
+the installed Verilator tree, Perl, Make, GCC 13, binutils, development headers,
 and required libraries. Rocky Linux 8.10's base system and glibc are required.
 The supplied compiler builds users' SystemVerilog models, including timing
 models; this is separate from building Verilator itself.
+
+An existing system ``python3`` is required; Python is not included in the
+archive. Python 3.12 selected through alternatives is tested in CI. Verilator
+resolves ``python3`` through PATH, so the system's existing selection is used.
+The installer checks for Python but does not install it or change alternatives.
 
 The default installation is /opt/verilator-rockylinux8, with public Verilator
 commands linked in /usr/local/bin. The compiler and Perl are private to the
@@ -34,9 +39,8 @@ The installer embeds the exact archive name and SHA-256. Older archives remain
 available so a saved installer continues to work after a new build.
 
 ``verilator-toolchain COMMAND ...`` runs another command with the private
-compiler and runtime environment. Python's standard library is bundled;
-optional analysis features requiring additional Python packages are not part
-of the offline model-build smoke test.
+compiler and runtime environment. Python helpers use the system interpreter
+and its standard library.
 
 Fork maintenance
 ----------------

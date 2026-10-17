@@ -2,13 +2,16 @@
 # SPDX-License-Identifier: LGPL-3.0-only OR Artistic-2.0
 set -euo pipefail
 
-# This container has no network, language tools, or development headers.
-for name in g++ make perl python3; do
+# Only the system Python is preinstalled; the deployment has no network.
+for name in g++ make perl; do
     if command -v "$name"; then
         printf 'Unexpected preinstalled tool: %s\n' "$name" >&2
         exit 1
     fi
 done
+python3 -c 'import sys; assert sys.version_info[:2] == (3, 12), sys.version'
+system_python=$(python3 -c 'import sys; print(sys.executable)')
+python_target=$(readlink -f "$(command -v python3)")
 archives=(/work/dist/verilator-*.tar.gz)
 archive=${archives[0]}
 expect_failure() {
@@ -24,8 +27,19 @@ test ! -e /tmp/invalid-install
 expect_failure bash /work/dist/install.sh --archive "$archive" \
     --prefix /tmp/nested-install --bin-dir /tmp/nested-install/bin
 bash /work/dist/install.sh --archive "$archive"
+test ! -e /opt/verilator-rockylinux8/bin/python3
+test ! -e /opt/verilator-rockylinux8/runtime/bin/python3
+python_files=(/opt/verilator-rockylinux8/runtime/lib64/python* /opt/verilator-rockylinux8/runtime/lib64/libpython*)
+for path in "${python_files[@]}"; do
+    test ! -e "$path"
+done
+test "$(verilator-toolchain python3 -c 'import sys; print(sys.executable)')" = "$system_python"
+test "$(readlink -f "$(command -v python3)")" = "$python_target"
 verilator --version
 verilator_coverage --version
+verilator_gantt --help >/dev/null
+verilator_profcfunc --help >/dev/null
+verilator-toolchain python3 /opt/verilator-rockylinux8/share/verilator/bin/verilator_ccache_report --help >/dev/null
 test "$(verilator --get-supported COROUTINES)" = 1
 ln -s /opt/verilator-rockylinux8 /tmp/prefix-alias
 expect_failure bash /work/dist/install.sh --archive "$archive" \

@@ -20,10 +20,6 @@ case "$command_name" in
     make|perl|xargs)
         exec "$prefix/runtime/bin/$command_name" "$@"
         ;;
-    python3)
-        export PYTHONHOME="$prefix/runtime"
-        exec "$prefix/runtime/bin/python3" "$@"
-        ;;
     verilator-toolchain)
         exec "$@"
         ;;
