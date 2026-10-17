@@ -97,6 +97,8 @@ mkdir -p -- "$(dirname -- "$prefix")"
 staging=$(mktemp -d "${prefix}.install.XXXXXX")
 tar -xzf "$archive" --strip-components=1 -C "$staging"
 [[ -f $staging/.verilator-rockylinux8 ]] || die 'The archive is not a Verilator distribution'
+# mktemp creates a private directory; the installed commands must be usable by all users.
+chmod 755 -- "$staging"
 "$staging/bin/verilator" --version
 "$staging/bin/g++" --version | head -n 1
 

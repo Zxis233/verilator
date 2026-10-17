@@ -20,6 +20,19 @@ expect_failure() {
         exit 1
     fi
 }
+run_as_user() {
+    python3 - "$@" <<'PY'
+import os
+import pwd
+import sys
+
+user = pwd.getpwnam("nobody")
+os.setgroups([])
+os.setgid(user.pw_gid)
+os.setuid(user.pw_uid)
+os.execvp(sys.argv[1], sys.argv[1:])
+PY
+}
 : > /tmp/bad-archive.tar.gz
 expect_failure bash /work/dist/install.sh --archive /tmp/bad-archive.tar.gz \
     --prefix /tmp/invalid-install --no-symlinks
@@ -35,12 +48,12 @@ for path in "${python_files[@]}"; do
 done
 test "$(verilator-toolchain python3 -c 'import sys; print(sys.executable)')" = "$system_python"
 test "$(readlink -f "$(command -v python3)")" = "$python_target"
-verilator --version
-verilator_coverage --version
-verilator_gantt --help >/dev/null
-verilator_profcfunc --help >/dev/null
-verilator-toolchain python3 /opt/verilator-rockylinux8/share/verilator/bin/verilator_ccache_report --help >/dev/null
-test "$(verilator --get-supported COROUTINES)" = 1
+run_as_user verilator --version
+run_as_user verilator_coverage --version
+run_as_user verilator_gantt --help >/dev/null
+run_as_user verilator_profcfunc --help >/dev/null
+run_as_user verilator-toolchain python3 /opt/verilator-rockylinux8/share/verilator/bin/verilator_ccache_report --help >/dev/null
+test "$(run_as_user verilator --get-supported COROUTINES)" = 1
 ln -s /opt/verilator-rockylinux8 /tmp/prefix-alias
 expect_failure bash /work/dist/install.sh --archive "$archive" \
     --prefix /tmp/prefix-alias --no-symlinks
@@ -57,18 +70,19 @@ module smoke;
   end
 endmodule
 EOF
-verilator --binary --timing -j 2 --top-module smoke \
+run_as_user verilator --binary --timing -j 2 --top-module smoke \
     --Mdir /tmp/obj_dir /tmp/smoke.sv
-/tmp/obj_dir/Vsmoke | tee /tmp/smoke.log
+run_as_user /tmp/obj_dir/Vsmoke | tee /tmp/smoke.log
 grep -q TIMING_SMOKE_OK /tmp/smoke.log
 
 # The installed tree must work outside the configure-time /opt prefix too.
 bash /work/dist/install.sh --archive "$archive" --prefix /tmp/relocated --no-symlinks
-/tmp/relocated/bin/verilator --binary --timing -j 2 --top-module smoke \
+run_as_user /tmp/relocated/bin/verilator --binary --timing -j 2 --top-module smoke \
     --Mdir /tmp/relocated_obj /tmp/smoke.sv
-/tmp/relocated_obj/Vsmoke | grep TIMING_SMOKE_OK
+run_as_user /tmp/relocated_obj/Vsmoke | grep TIMING_SMOKE_OK
 
 # Updating keeps the previous installation rather than deleting it.
 bash /work/dist/install.sh --archive "$archive"
 backups=(/opt/verilator-rockylinux8.previous.*)
 test -d "${backups[0]}"
+run_as_user verilator --version
