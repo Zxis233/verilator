@@ -22,6 +22,7 @@ Deploy the precompiled Rocky Linux 8.10 x86_64 distribution. Installation
 does not use a package manager, check out sources, or compile anything.
 
 Defaults: --prefix /opt/verilator-rockylinux8 --bin-dir /usr/local/bin
+Requires an existing system python3 (tested with Python 3.12).
 Use --archive with a previously downloaded release archive for offline use.
 For a user installation, select a writable prefix and --no-symlinks.
 EOF
@@ -49,6 +50,8 @@ done
 source /etc/os-release
 [[ $ID == rocky && $VERSION_ID == 8.10 ]] || die 'This package requires Rocky Linux 8.10'
 [[ $(uname -m) == x86_64 ]] || die 'This package requires x86_64'
+command -v python3 >/dev/null || die 'System python3 is required; configure it before installing'
+python3 --version || die 'System python3 cannot run'
 [[ $archive_sha256 =~ ^[0-9a-f]{64}$ ]] || die 'Use the generated install.sh from the release assets'
 [[ $prefix == /* && $prefix != / && ! $prefix =~ [[:space:]] ]] || die 'Prefix must be an absolute path without spaces'
 [[ $bin_dir == /* && ! $bin_dir =~ [[:space:]] ]] || die 'Bin directory must be an absolute path without spaces'

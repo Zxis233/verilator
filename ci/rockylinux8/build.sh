@@ -16,8 +16,8 @@ dnf -y install epel-release dnf-plugins-core
 dnf config-manager --set-enabled powertools
 dnf -y install autoconf bison diffutils file findutils flex \
     gcc-toolset-13-binutils gcc-toolset-13-gcc-c++ git gzip help2man \
-    make perl-core python39 tar which xz zlib-devel
-ln -sfn /usr/bin/python3.9 /usr/local/bin/python3
+    make perl-core python3.12 tar which xz zlib-devel
+ln -sfn /usr/bin/python3.12 /usr/local/bin/python3
 # The checkout belongs to the runner user, while this container runs as root.
 git config --global --add safe.directory "$(pwd)"
 source_sha=$(git rev-parse HEAD)
@@ -67,8 +67,6 @@ while IFS= read -r -d '' path; do
 done < <(find "$package_root/toolchain" -type f -name '*.so' -print0)
 
 cp -aL /usr/bin/perl /usr/bin/make /usr/bin/xargs "$package_root/runtime/bin/"
-cp -aL /usr/bin/python3.9 "$package_root/runtime/bin/python3"
-cp -aL /usr/lib64/python3.9 "$package_root/runtime/lib64/"
 cp -aL /usr/lib64/perl5 "$package_root/runtime/lib64/"
 cp -aL /usr/share/perl5 "$package_root/runtime/share/"
 
@@ -90,7 +88,7 @@ done < <(find "$package_root/toolchain" "$package_root/runtime" "$package_root/l
 for path in "$package_root/libexec/"*; do
     install -m 755 ci/rockylinux8/launch.sh "$package_root/bin/${path##*/}"
 done
-for name in gcc g++ cc c++ make perl python3 xargs verilator-toolchain; do
+for name in gcc g++ cc c++ make perl xargs verilator-toolchain; do
     install -m 755 ci/rockylinux8/launch.sh "$package_root/bin/$name"
 done
 # pkg-config is the one installed metadata file that embeds its old prefix.
@@ -114,8 +112,8 @@ cp dist/BUILD-INFO.txt "$package_root/BUILD-INFO.txt"
 
 # Publish matching sources for the redistributed compiler/runtime packages.
 {
-    rpm -q --qf '%{SOURCERPM}\n' "${sysroot_packages[@]}" findutils make perl-interpreter python39
-    find /opt/rh/gcc-toolset-13/root/usr /usr/include /usr/lib64/perl5 /usr/share/perl5 /usr/lib64/python3.9 \
+    rpm -q --qf '%{SOURCERPM}\n' "${sysroot_packages[@]}" findutils make perl-interpreter
+    find /opt/rh/gcc-toolset-13/root/usr /usr/include /usr/lib64/perl5 /usr/share/perl5 \
         -type f -print0 | xargs -0 rpm -qf --qf '%{SOURCERPM}\n'
     sort -u "$stage/runtime-files" | xargs rpm -qf --qf '%{SOURCERPM}\n'
 } | sort -u > "$package_root/SOURCE-RPMS.txt"
